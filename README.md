@@ -2,7 +2,7 @@
 
 **Drift** — приложение для друзей: чат, голосовые каналы и демонстрация экрана **без постоянного сервера в облаке**.
 
-Основан на [Drift от ASMAXI](https://github.com/ASMAXI/p2pchat). Развитие интерфейса и исправления — nometro.studio. Текущая версия — **2.0.0**.
+Основан на [Drift от ASMAXI](https://github.com/ASMAXI/p2pchat). Развитие интерфейса и исправления — nometro.studio. Текущая версия — **2.0.1**.
 
 ---
 
@@ -81,7 +81,7 @@ cd artifacts/p2pchat && pnpm desktop:dev
 ```
 
 **Релиз:** поднять версию в `artifacts/p2pchat` (`package.json`, `tauri.conf.json`, `Cargo.toml`, `app-update.ts`) →  
-`git tag v2.0.0 && git push origin v2.0.0` — GitHub Actions соберёт установщики для Windows и macOS Apple Silicon. Все участники должны установить Drift 2 из этого репозитория; версия ASMAXI проверяет обновления в исходном репозитории.
+`git tag v2.0.1 && git push origin v2.0.1` — GitHub Actions соберёт установщики для Windows и macOS Apple Silicon. Все участники должны установить Drift 2 из этого репозитория; версия ASMAXI проверяет обновления в исходном репозитории.
 
 Опционально стабильный TURN для голоса между разными сетями: [metered.ca](https://www.metered.ca/) API key → Настройки → Подключение → Ручные параметры, или свой coturn.
 
@@ -90,3 +90,5 @@ lib/p2p-*              # identity, protocol, room session
 artifacts/api-server   # опциональный bootstrap
 artifacts/p2pchat      # UI + Tauri (local hub + tunnel)
 ```
+
+macOS-сборка использует ad-hoc подпись, без notarization Apple. При первом запуске скачанного приложения macOS может потребовать разрешить Drift в «Системные настройки → Конфиденциальность и безопасность».
