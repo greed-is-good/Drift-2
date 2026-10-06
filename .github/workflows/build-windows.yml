@@ -92,6 +92,8 @@ jobs:
       - name: Build macOS installer
         working-directory: artifacts/p2pchat
         run: pnpm exec tauri build --bundles app,dmg
+      - name: Verify macOS package signature
+        run: codesign --verify --deep --strict artifacts/p2pchat/src-tauri/target/release/bundle/macos/Drift.app
       - name: Upload macOS installer
         uses: actions/upload-artifact@v4
         with:
