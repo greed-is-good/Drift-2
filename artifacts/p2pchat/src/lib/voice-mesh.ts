@@ -9,6 +9,7 @@ import {
   warmIceServers,
 } from "@/lib/network-settings";
 import { debugLog } from "@/lib/debug-log";
+import { withMicrophoneTimeout } from "@/lib/microphone-request";
 import {
   buildVoiceNatReport,
   rememberIceServerSummary,
@@ -17,22 +18,6 @@ import {
   summarizeIceServers,
   type VoiceNatReport,
 } from "@/lib/voice-diagnostics";
-
-function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
-  return new Promise((resolve, reject) => {
-    const timer = window.setTimeout(() => reject(new Error(message)), ms);
-    promise.then(
-      (value) => {
-        window.clearTimeout(timer);
-        resolve(value);
-      },
-      (error) => {
-        window.clearTimeout(timer);
-        reject(error);
-      },
-    );
-  });
-}
 
 type VoiceSignal =
   | { kind: "offer"; description: RTCSessionDescriptionInit }
@@ -333,6 +318,7 @@ export class VoiceMesh {
   }
 
   setInputDevice(deviceId: string): void {
+    if (this.inputDeviceId === deviceId) return;
     this.inputDeviceId = deviceId;
     if (this.rawStream) void this.acquireMic();
   }
@@ -393,10 +379,8 @@ export class VoiceMesh {
       autoGainControl: this.micProcessing.autoGainControl,
     };
     const requestMic = (constraints: MediaTrackConstraints) =>
-      withTimeout(
+      withMicrophoneTimeout(
         navigator.mediaDevices.getUserMedia({ audio: constraints }),
-        20_000,
-        "Нет ответа от микрофона (таймаут 20 с). Разрешите доступ в Windows/приложении и попробуйте снова.",
       );
 
     let nextRaw: MediaStream;
@@ -476,7 +460,9 @@ export class VoiceMesh {
   }
 
   async setMicProcessing(partial: Partial<MicProcessing>): Promise<void> {
-    this.micProcessing = { ...this.micProcessing, ...partial };
+    const next = { ...this.micProcessing, ...partial };
+    if ((Object.keys(next) as Array<keyof MicProcessing>).every((key) => next[key] === this.micProcessing[key])) return;
+    this.micProcessing = next;
     if (!this.rawStream) return;
     await this.acquireMic();
   }
@@ -730,9 +716,7 @@ export class VoiceMesh {
         if (state === "connected" || state === "connecting" || state === "new") {
           // Setup already owns this PC — don't recreate mid-offer.
           if (initiator && existing.connection.signalingState === "stable" && !existing.makingOffer) {
-            const hasLocalOffer =
-              existing.connection.localDescription?.type === "offer" ||
-              existing.connection.signalingState === "have-local-offer";
+            const hasLocalOffer = existing.connection.localDescription?.type === "offer";
             if (!hasLocalOffer && !existing.remoteReady) {
               try {
                 existing.makingOffer = true;

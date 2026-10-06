@@ -255,7 +255,7 @@ export function compareMessages(left: WireMessage, right: WireMessage): number {
 export function defaultChannels(): WireChannel[] {
   return [
     { id: "general", name: "общий", type: "text", unreadCount: 0, members: 0 },
-    { id: "lounge", name: "вечерний лоунж", type: "voice", unreadCount: 0, members: 0 },
+    { id: "lounge", name: "Голосовой 1", type: "voice", unreadCount: 0, members: 0 },
   ];
 }
 

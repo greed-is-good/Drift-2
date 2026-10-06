@@ -23,10 +23,12 @@ use std::os::windows::process::CommandExt;
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 const ALLOWED_PREFIXES: &[&str] = &[
-    "https://github.com/ASMAXI/",
-    "https://objects.githubusercontent.com/",
-    "https://release-assets.githubusercontent.com/",
+    "https://github.com/greed-is-good/Drift-2/releases/download/",
 ];
+
+fn is_allowed_update_url(url: &str) -> bool {
+    ALLOWED_PREFIXES.iter().any(|prefix| url.starts_with(prefix))
+}
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -302,8 +304,11 @@ pub async fn install_update(
     url: String,
     sha256: Option<String>,
 ) -> Result<(), String> {
-    if !ALLOWED_PREFIXES.iter().any(|prefix| url.starts_with(prefix)) {
-        return Err("Обновления скачиваются только с GitHub Releases ASMAXI".into());
+    if !cfg!(windows) {
+        return Err("На этой платформе скачайте обновление со страницы релиза".into());
+    }
+    if !is_allowed_update_url(&url) {
+        return Err("Обновления скачиваются только из релизов greed-is-good/Drift-2".into());
     }
     let expected = sha256
         .as_deref()
@@ -329,6 +334,19 @@ pub async fn install_update(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_accepts_this_forks_release_urls() {
+        assert!(is_allowed_update_url("https://github.com/greed-is-good/Drift-2/releases/download/v2.0.0/Drift-setup.exe"));
+        for url in [
+            "https://github.com/ASMAXI/p2pchat/releases/download/v2.0.0/Drift-setup.exe",
+            "https://github.com/greed-is-good/other/releases/download/v2.0.0/setup.exe",
+            "https://github.com.evil.test/greed-is-good/Drift-2/releases/download/v2.0.0/setup.exe",
+            "http://github.com/greed-is-good/Drift-2/releases/download/v2.0.0/setup.exe",
+        ] {
+            assert!(!is_allowed_update_url(url), "url={url}");
+        }
+    }
 
     #[test]
     fn normalizes_github_digest_from_shared_fixtures() {

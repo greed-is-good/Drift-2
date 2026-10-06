@@ -63,6 +63,16 @@ pub struct TunnelHandle {
     child: Arc<Mutex<Option<Child>>>,
 }
 
+impl TunnelHandle {
+    pub fn is_running(&self) -> bool {
+        self.child.lock().ok().is_some_and(|mut guard| {
+            guard
+                .as_mut()
+                .is_some_and(|child| matches!(child.try_wait(), Ok(None)))
+        })
+    }
+}
+
 impl Drop for TunnelHandle {
     fn drop(&mut self) {
         if let Ok(mut guard) = self.child.lock() {
@@ -116,6 +126,8 @@ pub fn load_tunnel_prefs(app_data: &Path) -> (TunnelProvider, String, String) {
 }
 
 fn hide_window(command: &mut Command) {
+    #[cfg(not(windows))]
+    let _ = command;
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
@@ -124,15 +136,38 @@ fn hide_window(command: &mut Command) {
     }
 }
 
+pub fn is_localhost_run_origin(candidate: &str) -> bool {
+    let Ok(url) = tauri::Url::parse(candidate) else {
+        return false;
+    };
+    let Some(host) = url.host_str() else {
+        return false;
+    };
+    matches!(url.scheme(), "https" | "http")
+        && url.username().is_empty()
+        && url.password().is_none()
+        && url.query().is_none()
+        && url.fragment().is_none()
+        && matches!(url.path(), "" | "/")
+        && (host.ends_with(".lhr.life") || host.ends_with(".localhost.run"))
+        && !matches!(host, "admin.localhost.run" | "www.localhost.run" | "docs.localhost.run")
+}
+
 fn extract_url_line(line: &str, host_hints: &[String]) -> Option<String> {
+    let localhost_run = host_hints.iter().any(|hint| hint == "localhost.run");
     for scheme in ["https://", "http://"] {
-        if let Some(start) = line.find(scheme) {
+        for (start, _) in line.match_indices(scheme) {
             let rest = &line[start..];
             let end = rest
-                .find(|c: char| c.is_whitespace() || c == '|' || c == '"' || c == '\'' || c == ']')
+                .find(|c: char| c.is_whitespace() || c == '\u{1b}' || c == '|' || c == '"' || c == '\'' || c == ']')
                 .unwrap_or(rest.len());
             let candidate = rest[..end].trim_end_matches(['.', ',', ';', ')', ']']);
-            if host_hints.iter().any(|hint| candidate.contains(hint.as_str())) {
+            let matches = if localhost_run {
+                is_localhost_run_origin(candidate)
+            } else {
+                host_hints.iter().any(|hint| candidate.contains(hint.as_str()))
+            };
+            if matches {
                 return Some(candidate.trim_end_matches('/').to_string());
             }
         }
@@ -429,6 +464,7 @@ fn extract_zip_windows(zip_path: &Path, dest_dir: &Path) -> Result<(), String> {
     }
 }
 
+#[cfg(windows)]
 fn ps_quote(value: &str) -> String {
     format!("'{}'", value.replace('\'', "''"))
 }
@@ -894,5 +930,27 @@ mod tests {
             "d48bb636dd03cbd527b9db324550b98b3e619aece6bd89bbfcd3eac3c6652f4c"
         );
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn localhost_run_skips_service_links_and_accepts_forwarded_domains() {
+        let hints = vec!["localhost.run".to_string()];
+        for line in [
+            "manage domains at https://admin.localhost.run/",
+            "see https://localhost.run/docs/forever-free/",
+            "https://admin.localhost.run/?next=room.lhr.life",
+        ] {
+            assert_eq!(extract_url_line(line, &hints), None);
+        }
+        assert_eq!(
+            extract_url_line("12235e0c11cf96.lhr.life tunneled with tls termination, https://12235e0c11cf96.lhr.life", &hints),
+            Some("https://12235e0c11cf96.lhr.life".to_string())
+        );
+        assert_eq!(
+            extract_url_line("https://admin.localhost.run/ then \u{1b}[32mhttps://room.localhost.run/\u{1b}[0m", &hints),
+            Some("https://room.localhost.run".to_string())
+        );
+        assert!(!is_localhost_run_origin("https://room.lhr.life.evil.example"));
+        assert!(!is_localhost_run_origin("https://evil.example/room.lhr.life"));
     }
 }

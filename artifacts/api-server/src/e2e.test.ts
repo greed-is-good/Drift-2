@@ -13,6 +13,7 @@ import {
 import {
   createInitialRoomState,
   joinProofText,
+  LIMITS,
   PROTOCOL_VERSION,
   type ServerEvent,
 } from "@workspace/p2p-protocol";
@@ -576,56 +577,59 @@ describe("security", { concurrency: false }, () => {
     });
 
     const hostSocket = new WebSocket(`${origin.replace("http", "ws")}/api/ws`);
-    await new Promise<void>((resolve, reject) => {
-      hostSocket.onopen = () => resolve();
-      hostSocket.onerror = () => reject(new Error("host socket error"));
-    });
-    const joined = new Promise<ServerEvent>((resolve) => {
-      hostSocket.onmessage = (event) => resolve(JSON.parse(String(event.data)) as ServerEvent);
-    });
-    hostSocket.send(
-      JSON.stringify({
-        type: "join",
-        protocol: PROTOCOL_VERSION,
-        roomId: "signal-room",
-        inviteToken: "token",
-        peerId: host.peerId,
-        displayName: host.displayName,
-        publicKey: host.publicKey,
-        ts,
-        proof: signText(host, joinProofText("signal-room", host.peerId, ts)),
-        endpoints: [origin],
-        host: true,
-        snapshot: state,
-        coordinatorClaim: claim,
-      }),
-    );
-    const joinEvent = await joined;
-    assert.equal(joinEvent.type, "state");
-
-    let rateLimited = false;
-    const waitRate = new Promise<void>((resolve) => {
-      hostSocket.onmessage = (event) => {
-        const data = JSON.parse(String(event.data)) as ServerEvent;
-        if (data.type === "error" && data.code === "RATE_LIMIT") {
-          rateLimited = true;
-          resolve();
-        }
-      };
-    });
-    for (let i = 0; i < 100; i += 1) {
+    try {
+      await new Promise<void>((resolve, reject) => {
+        hostSocket.onopen = () => resolve();
+        hostSocket.onerror = () => reject(new Error("host socket error"));
+      });
+      const joined = new Promise<ServerEvent>((resolve) => {
+        hostSocket.onmessage = (event) => resolve(JSON.parse(String(event.data)) as ServerEvent);
+      });
       hostSocket.send(
         JSON.stringify({
-          type: "signal",
-          toPeerId: peer.peerId,
-          data: { kind: "ice", candidate: { candidate: `c${i}`, sdpMid: "0" } },
+          type: "join",
+          protocol: PROTOCOL_VERSION,
+          roomId: "signal-room",
+          inviteToken: "token",
+          peerId: host.peerId,
+          displayName: host.displayName,
+          publicKey: host.publicKey,
+          ts,
+          proof: signText(host, joinProofText("signal-room", host.peerId, ts)),
+          endpoints: [origin],
+          host: true,
+          snapshot: state,
+          coordinatorClaim: claim,
         }),
       );
+      const joinEvent = await joined;
+      assert.equal(joinEvent.type, "state");
+
+      let rateLimited = false;
+      const waitRate = new Promise<void>((resolve) => {
+        hostSocket.onmessage = (event) => {
+          const data = JSON.parse(String(event.data)) as ServerEvent;
+          if (data.type === "error" && data.code === "RATE_LIMIT") {
+            rateLimited = true;
+            resolve();
+          }
+        };
+      });
+      for (let i = 0; i <= LIMITS.rateMaxSignals; i += 1) {
+        hostSocket.send(
+          JSON.stringify({
+            type: "signal",
+            toPeerId: peer.peerId,
+            data: { kind: "ice", candidate: { candidate: `c${i}`, sdpMid: "0" } },
+          }),
+        );
+      }
+      await Promise.race([waitRate, new Promise((resolve) => setTimeout(resolve, 2000))]);
+      assert.equal(rateLimited, true);
+    } finally {
+      hostSocket.close();
+      await node.close();
     }
-    await Promise.race([waitRate, new Promise((resolve) => setTimeout(resolve, 2000))]);
-    assert.equal(rateLimited, true);
-    hostSocket.close();
-    await node.close();
   });
 
   it("drops forged messages from a replica and rejects forged live messages", async () => {

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useMemo, type CSSProperties, type FormEvent, type KeyboardEvent, type MouseEvent as ReactMouseEvent } from 'react';
+import { useEffect, useRef, useState, useMemo, type CSSProperties, type KeyboardEvent, type MouseEvent as ReactMouseEvent } from 'react';
 import { Link, useLocation } from 'wouter';
 import { Activity, AlarmClock, ChevronDown, Copy, Download, Hash, Headphones, LockKeyhole, Menu, Mic, MicOff, Plus, Radio, Send, Settings, Signal, Sparkles, UserPlus, Users, Volume2, VolumeX, X, ImageIcon, Monitor, MonitorOff, Music2, PanelRightClose, PanelRightOpen } from 'lucide-react';
 import { PatriotJoinPopup, shouldShowPatriotPopup } from '@/components/patriot-join-popup';
@@ -31,9 +31,12 @@ import {
 } from '@/lib/chat-commands';
 import { type ChannelType, type Server, type Channel, type Message, type StoredVoice, SERVER_KEY, CHANNELS_KEY, MESSAGES_KEY, VOICE_KEY, PROFILE_NAME_KEY, CONNECTION_KEY, uid, readStore, writeStore, mergeChannelUnread, roomStateToClientState, seedServer, seedChannels, seedMessages, seedVoice } from '@/lib/app-shared';
 import { LIMITS } from '@workspace/p2p-protocol';
-import { ChatName, CreatorCredit, AppVersionLabel, Toast, ConnectionStatusChips, PatriotName } from '@/components/app-brand';
+import { ChatName, CreatorCredit, StudioCredit, AppVersionLabel, Toast, ConnectionStatusChips, PatriotName } from '@/components/app-brand';
 import { SettingsPage } from '@/components/settings-page';
 import { Diagnostics } from '@/components/diagnostics-panel';
+import { ComposerTools } from '@/components/drift-ui/composer-tools';
+import { VoiceControls } from '@/components/drift-ui/voice-controls';
+import { RoomHeader, RoomWelcome } from '@/components/drift-ui/room-header';
 import { ScreenShareStage } from '@/components/screen-share-stage';
 
 function WorkspaceNav({
@@ -80,81 +83,6 @@ function WorkspaceNav({
 }
 
 
-function CreateChannelDialog({ onClose, onCreate }: { onClose: () => void; onCreate: (name: string, type: ChannelType) => void }) {
-  const [name, setName] = useState('');
-  const [type, setType] = useState<ChannelType>('text');
-  const submit = (event: FormEvent) => { event.preventDefault(); if (name.trim()) onCreate(name.trim(), type); };
-  return (
-    <div className="dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-      <form className="dialog-card" onSubmit={submit} data-testid="form-create-channel">
-        <div className="mb-6 flex items-start justify-between"><div><div className="font-mono text-[10px] uppercase tracking-[.18em] text-[hsl(var(--muted-foreground))]">Новое пространство</div><h3 className="font-display mt-2 text-2xl font-bold tracking-[-.05em]">Добавить канал</h3></div><button type="button" className="icon-btn" onClick={onClose} aria-label="Закрыть" data-testid="button-close-channel-dialog"><X size={18} /></button></div>
-        <label className="field-label" htmlFor="channel-name">Название</label><input id="channel-name" className="field-input" value={name} onChange={(event) => setName(event.target.value)} placeholder="например, кино" autoFocus data-testid="input-channel-name" />
-        <div className="mt-5 grid grid-cols-2 gap-2">
-          <button type="button" onClick={() => setType('text')} className={`flex items-center gap-3 rounded-xl border p-3 text-left transition ${type === 'text' ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary)/.12)]' : 'border-[hsl(var(--border))]'}`} data-testid="button-channel-type-text"><Hash size={17} /><span><strong className="block text-sm">Текстовый</strong><small className="text-[11px] text-[hsl(var(--muted-foreground))]">Сообщения</small></span></button>
-          <button type="button" onClick={() => setType('voice')} className={`flex items-center gap-3 rounded-xl border p-3 text-left transition ${type === 'voice' ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary)/.12)]' : 'border-[hsl(var(--border))]'}`} data-testid="button-channel-type-voice"><Volume2 size={17} /><span><strong className="block text-sm">Голосовой</strong><small className="text-[11px] text-[hsl(var(--muted-foreground))]">Разговор</small></span></button>
-        </div>
-        <button className="primary-btn mt-6 w-full" type="submit" data-testid="button-submit-channel">Создать канал <Plus size={16} /></button>
-      </form>
-    </div>
-  );
-}
-
-function InviteDialog({
-  server,
-  onClose,
-  onNotify,
-  onInviteUpdated,
-}: {
-  server: Server;
-  onClose: () => void;
-  onNotify: (text: string) => void;
-  onInviteUpdated?: (invite: string) => void;
-}) {
-  const [link, setLink] = useState(server.invite ?? '');
-  const [refreshing, setRefreshing] = useState(true);
-  const isLocal = isLocalhostOrigin(link);
-
-  useEffect(() => {
-    let cancelled = false;
-    setRefreshing(true);
-    void refreshCoordinatorInvite()
-      .then((meta) => {
-        if (cancelled) return;
-        const next = meta?.invite || server.invite || '';
-        setLink(next);
-        if (meta?.invite) onInviteUpdated?.(meta.invite);
-      })
-      .finally(() => {
-        if (!cancelled) setRefreshing(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-    // Refresh once when the dialog opens so friends never get a dead Quick Tunnel hostname.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const copy = async () => {
-    if (!link) {
-      onNotify('Ссылка ещё не готова — подождите туннель');
-      return;
-    }
-    try { await navigator.clipboard.writeText(link); } catch { /* clipboard can be unavailable in local previews */ }
-    onNotify('Свежая ссылка скопирована — друг открывает её в Chrome/Edge (не в IE)');
-    onClose();
-  };
-  return <div className="dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><div className="dialog-card">
-    <div className="mb-6 flex items-start justify-between"><div><div className="font-mono text-[10px] uppercase tracking-[.18em] text-[hsl(var(--muted-foreground))]">Доступ в комнату</div><h3 className="font-display mt-2 text-2xl font-bold tracking-[-.05em]">Позвать своих</h3></div><button className="icon-btn" onClick={onClose} aria-label="Закрыть" data-testid="button-close-invite-dialog"><X size={18} /></button></div>
-    <p className="text-sm leading-6 text-[hsl(var(--muted-foreground))]">Ссылка обновляется при каждом открытии этого окна (актуальный туннель). В Steam: ПКМ по ссылке → открыть во внешнем браузере (Chrome/Edge), не Internet Explorer. У друга должен быть установлен Drift.</p>
-    {isLocal && <div className="mt-4 rounded-xl border border-[hsl(var(--accent))]/30 bg-[hsl(var(--accent)/.08)] p-3 text-xs leading-5 text-[hsl(var(--accent))]">
-      <strong>Внимание:</strong> в ссылке только localhost. Друзья в другой сети не подключатся.
-      <div className="mt-2 font-mono text-[10px]">В одной Wi‑Fi приглашение должно содержать LAN-адрес (его подставит desktop-клиент). Между сетями нужен публичный bootstrap или туннель.</div>
-    </div>}
-    <div className="mt-5 max-h-40 overflow-auto rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.55)] p-3"><div className="break-all font-mono text-[11px] leading-5 tracking-tight text-[hsl(var(--foreground))]" data-testid="text-invite-link">{refreshing ? 'Обновляем ссылку под текущий туннель…' : (link || 'Ссылка появится после поднятия туннеля')}</div></div>
-    <button className="primary-btn mt-5 w-full" onClick={copy} disabled={refreshing || !link} data-testid="button-copy-invite"><Copy size={16} /> {refreshing ? 'Готовим ссылку…' : 'Скопировать ссылку'}</button>
-  </div></div>;
-}
-
 function ChannelPane({
   server,
   channels,
@@ -199,7 +127,7 @@ function ChannelPane({
   voiceRooms: StoredVoice[];
   selectedId: string;
   onSelect: (id: string) => void;
-  onAdd: () => void;
+  onAdd: (type: ChannelType) => void;
   onInvite: () => void;
   onLeaveServer: () => void;
   selfPeerId?: string;
@@ -238,7 +166,7 @@ function ChannelPane({
   const theme = useAppTheme();
   return <aside className="channel-pane">
     <div className="channel-header">
-      <button className="flex w-full items-center justify-between text-left" onClick={onInvite} data-testid="button-server-menu">
+      <div className="flex w-full items-center justify-between text-left" data-testid="room-heading">
         <span>
           <span className="block font-display text-[17px] font-bold tracking-[-.04em]">{server.name}</span>
           <span className="mt-1 flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
@@ -251,12 +179,11 @@ function ChannelPane({
             </span>
           )}
         </span>
-        <ChevronDown size={16} className="text-[hsl(var(--muted-foreground))]" />
-      </button>
+      </div>
     </div>
     <div className="channel-scroll scrollbar-thin">
-      <div className="mb-5"><div className="mb-2 flex items-center justify-between px-2 text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]"><span>Текстовые</span><button className="icon-btn" style={{ width: 22, height: 22 }} onClick={onAdd} aria-label="Добавить канал" data-testid="button-add-text-channel"><Plus size={14} /></button></div>{textChannels.map((channel) => <button key={channel.id} className={`channel-row ${channel.id === selectedId ? 'active' : ''}`} onClick={() => onSelect(channel.id)} data-testid={`button-channel-${channel.id}`}><Hash size={17} /><span className="min-w-0 flex-1 truncate text-left text-[13px] font-semibold">{channel.name}</span>{channel.unreadCount > 0 && <span className="rounded-full bg-[hsl(var(--accent))] px-1.5 py-0.5 text-[10px] font-bold text-[hsl(var(--accent-foreground))]">{channel.unreadCount}</span>}</button>)}</div>
-      <div><div className="mb-2 flex items-center justify-between px-2 text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]"><span>Голосовые</span><button className="icon-btn" style={{ width: 22, height: 22 }} onClick={onAdd} aria-label="Добавить голосовой канал" data-testid="button-add-voice-channel"><Plus size={14} /></button></div>
+      <div className="mb-5"><div className="mb-2 flex items-center justify-between px-2 text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]"><span>Текстовые</span><button className="icon-btn" style={{ width: 22, height: 22 }} onClick={() => onAdd('text')} aria-label="Добавить текстовый канал" data-testid="button-add-text-channel"><Plus size={14} /></button></div>{textChannels.map((channel) => <button key={channel.id} className={`channel-row ${channel.id === selectedId ? 'active' : ''}`} onClick={() => onSelect(channel.id)} data-testid={`button-channel-${channel.id}`}><Hash size={17} /><span className="min-w-0 flex-1 truncate text-left text-[13px] font-semibold">{channel.name}</span>{channel.unreadCount > 0 && <span className="rounded-full bg-[hsl(var(--accent))] px-1.5 py-0.5 text-[10px] font-bold text-[hsl(var(--accent-foreground))]">{channel.unreadCount}</span>}</button>)}</div>
+      <div><div className="mb-2 flex items-center justify-between px-2 text-[10px] font-bold uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]"><span>Голосовые</span><button className="icon-btn" style={{ width: 22, height: 22 }} onClick={() => onAdd('voice')} aria-label="Добавить голосовой канал" data-testid="button-add-voice-channel"><Plus size={14} /></button></div>
         {voiceChannels.map((channel) => {
           const room = voiceById[channel.id];
           const people = room?.participants ?? [];
@@ -315,89 +242,17 @@ function ChannelPane({
       />
     )}
     <div className="channel-footer space-y-1">
-      {activeVoiceChannelId && onMute && onDeafen && (
-        <div className="mb-2 space-y-2 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.35)] p-2" data-testid="channel-voice-controls">
-          {voiceQuality && (
-            <div
-              className="flex items-center gap-2 rounded-md bg-[hsl(var(--background)/.55)] px-2 py-1.5 font-mono text-[11px]"
-              data-testid="voice-quality-chip"
-              title={voiceQuality.path === 'relay' ? 'Через TURN' : voiceQuality.path === 'srflx' ? 'Через интернет (STUN)' : voiceQuality.path === 'host' ? 'Прямой / LAN' : 'Путь ещё считается'}
-            >
-              <span aria-hidden>
-                {voiceQuality.level === 'ok' ? '🟢' : voiceQuality.level === 'fair' ? '🟡' : '🔴'}
-              </span>
-              <span className="font-semibold text-[hsl(var(--foreground))]">
-                {voiceQuality.rttMs != null ? `${voiceQuality.rttMs} ms` : '… ms'}
-              </span>
-              <span className="ml-auto text-[10px] uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
-                {voiceQuality.path === 'relay' ? 'TURN' : voiceQuality.path === 'srflx' ? 'STUN' : voiceQuality.path === 'host' ? 'P2P' : 'ICE'}
-              </span>
-            </div>
-          )}
-          {voiceTalkMode === 'ptt' && (
-            <div
-              className={`rounded-md px-2 py-1.5 text-[11px] font-semibold transition ${
-                pttHeld
-                  ? 'bg-[hsl(var(--primary)/.22)] text-[hsl(var(--foreground))]'
-                  : 'bg-[hsl(var(--background)/.45)] text-[hsl(var(--muted-foreground))]'
-              }`}
-              data-testid="ptt-indicator"
-            >
-              {pttHeld
-                ? `Говорите · ${pttKeyLabel || 'PTT'}`
-                : `Зажмите ${pttKeyLabel || 'клавишу'}, чтобы говорить`}
-            </div>
-          )}
-          <div className="flex flex-wrap gap-1">
-            <button className={`icon-btn ${muted ? 'bg-[hsl(var(--accent)/.18)] text-[hsl(var(--accent))]' : ''}`} onClick={onMute} aria-label={muted ? 'Включить микрофон' : 'Выключить микрофон'} data-testid="button-toggle-mute">{muted ? <MicOff size={15} /> : <Mic size={15} />}</button>
-            <button className={`icon-btn ${deafened ? 'bg-[hsl(var(--accent)/.18)] text-[hsl(var(--accent))]' : ''}`} onClick={onDeafen} aria-label={deafened ? 'Включить звук' : 'Отключить звук'} data-testid="button-toggle-deafen">{deafened ? <VolumeX size={15} /> : <Headphones size={15} />}</button>
-            {onToggleScreenShare && (
-              <button
-                className={`icon-btn ${sharingScreen ? 'bg-[hsl(var(--primary)/.18)] text-[hsl(var(--primary))]' : ''}`}
-                onClick={onToggleScreenShare}
-                aria-label={sharingScreen ? 'Остановить демонстрацию экрана' : 'Поделиться экраном'}
-                data-testid="button-toggle-screen-share"
-              >
-                {sharingScreen ? <MonitorOff size={15} /> : <Monitor size={15} />}
-              </button>
-            )}
-            {onToggleNoise && (
-              <button className={`ghost-btn !h-8 !px-2 text-[10px] ${noiseSuppression ? '' : 'opacity-50'}`} onClick={onToggleNoise} data-testid="button-toggle-noise">Шум {noiseSuppression ? 'вкл' : 'выкл'}</button>
-            )}
-            {onToggleEcho && (
-              <button className={`ghost-btn !h-8 !px-2 text-[10px] ${echoCancellation ? '' : 'opacity-50'}`} onClick={onToggleEcho} data-testid="button-toggle-echo">Эхо {echoCancellation ? 'вкл' : 'выкл'}</button>
-            )}
-            {onToggleEnhancedNoise && (
-              <button className={`ghost-btn !h-8 !px-2 text-[10px] ${enhancedNoise ? '' : 'opacity-50'}`} onClick={onToggleEnhancedNoise} title="Мягкий доп. фильтр (может чуть «съедать» тихую речь)" data-testid="button-toggle-enhanced-noise">Шумодав+ {enhancedNoise ? 'вкл' : 'выкл'}</button>
-            )}
-          </div>
-          {onMicVolume && micVolume !== undefined && (
-            <label className="block text-[10px] text-[hsl(var(--muted-foreground))]">Громкость микрофона
-              <input type="range" min={0} max={100} value={Math.round(micVolume * 100)} onChange={(e) => onMicVolume(Number(e.target.value) / 100)} className="mt-1 w-full" data-testid="input-mic-volume" />
-            </label>
-          )}
-          {onToggleScreenShare && (
-            <button
-              type="button"
-              className={`flex w-full items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-[10px] font-semibold transition ${
-                sharingScreen
-                  ? 'bg-[hsl(var(--primary)/.16)] text-[hsl(var(--primary))]'
-                  : 'hover:bg-[hsl(var(--muted)/.55)] text-[hsl(var(--muted-foreground))]'
-              }`}
-              onClick={onToggleScreenShare}
-              data-testid="button-screen-share-footer"
-            >
-              {sharingScreen ? <><MonitorOff size={12} /> Стоп экран</> : <><Monitor size={12} /> Поделиться экраном</>}
-            </button>
-          )}
-        </div>
-      )}
-      {activeVoiceChannelId && onLeaveVoice && (
-        <button className="mb-1 flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-[11px] font-semibold text-[hsl(var(--primary))] transition hover:bg-[hsl(var(--primary)/.12)]" onClick={onLeaveVoice} data-testid="button-leave-voice-channel"><VolumeX size={14} /> Покинуть голосовой</button>
-      )}
-      <button className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-xs font-semibold text-[hsl(var(--muted-foreground))] transition hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))]" onClick={onInvite} data-testid="button-invite-members"><UserPlus size={15} /> Пригласить друзей</button>
-      <button className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-xs font-semibold text-[hsl(var(--accent))] transition hover:bg-[hsl(var(--accent)/.12)]" onClick={onLeaveServer} data-testid="button-leave-server"><X size={15} /> Покинуть сервер</button>
-      <CreatorCredit className="block px-2 pt-1 text-[8px] text-[hsl(var(--muted-foreground)/.7)]" />
+      {activeVoiceChannelId && onMute && onDeafen && <VoiceControls
+        name={voiceById[activeVoiceChannelId]?.name} muted={muted} deafened={deafened}
+        onMute={onMute} onDeafen={onDeafen} onLeaveVoice={onLeaveVoice}
+        sharingScreen={sharingScreen} onToggleScreenShare={onToggleScreenShare}
+        voiceQuality={voiceQuality} voiceTalkMode={voiceTalkMode} pttHeld={pttHeld} pttKeyLabel={pttKeyLabel}
+        micVolume={micVolume} onMicVolume={onMicVolume}
+        noiseSuppression={noiseSuppression} echoCancellation={echoCancellation} enhancedNoise={enhancedNoise}
+        onToggleNoise={onToggleNoise} onToggleEcho={onToggleEcho} onToggleEnhancedNoise={onToggleEnhancedNoise}
+      />}
+      <button className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-xs font-semibold text-[hsl(var(--accent))] transition hover:bg-[hsl(var(--accent)/.12)]" onClick={onLeaveServer} data-testid="button-leave-server"><X size={15} /> Выйти из комнаты</button>
+
       <AppVersionLabel className="mt-1 block px-2 text-[9px]" />
     </div>
   </aside>;
@@ -529,9 +384,8 @@ function MessageList({
   if (!visible.length) {
     return (
       <div className="flex h-full flex-col items-center justify-center px-6 text-center">
-        <div className="grid h-16 w-16 place-items-center rounded-2xl bg-[hsl(var(--primary)/.18)] text-[hsl(var(--secondary))]"><Sparkles size={25} /></div>
-        <h3 className="font-display mt-5 text-xl font-bold">Здесь пока тихо</h3>
-        <p className="mt-2 max-w-xs text-sm leading-6 text-[hsl(var(--muted-foreground))]">Начните разговор — первое сообщение задаст настроение комнате.</p>
+                <h3 className="font-display mt-5 text-xl font-bold">В канале пока нет сообщений</h3>
+        <p className="mt-2 max-w-xs text-sm leading-6 text-[hsl(var(--muted-foreground))]">Напишите первое.</p>
       </div>
     );
   }
@@ -683,7 +537,6 @@ function ChatComposer({
   const [mentionDismissed, setMentionDismissed] = useState(false);
   const [slashDismissed, setSlashDismissed] = useState(false);
   const [votekickDismissed, setVotekickDismissed] = useState(false);
-  const [sfxOpen, setSfxOpen] = useState(false);
   const slashOptions = slashCommandSuggestions(draft);
   const votekickOptions = votekickMemberSuggestions(draft, votekickMembers, selfPeerId);
   const showVotekickMenu = Boolean(votekickOptions && votekickOptions.length > 0 && !votekickDismissed);
@@ -821,55 +674,13 @@ function ChatComposer({
         </div>
       )}
       <input ref={fileInputRef} type="file" accept="image/*,application/pdf,application/zip,.pdf,.zip" className="hidden" onChange={(e) => { void onPickFile(e.target.files?.[0]); }} data-testid={fileInputTestId} />
-      {sfxOpen && onPlayFunSound && (
-        <div className="soundboard-panel mb-2 grid grid-cols-5 gap-1.5" data-testid="soundboard-panel">
-          {FUN_SOUNDS.map((sound) => (
-            <button
-              key={sound.id}
-              type="button"
-              className="flex flex-col items-center gap-0.5 rounded-lg px-1 py-1.5 text-[10px] font-semibold hover:bg-[hsl(var(--muted)/.55)]"
-              onClick={() => {
-                onPlayFunSound(sound.id);
-                setSfxOpen(false);
-              }}
-              data-testid={`button-sfx-${sound.id}`}
-            >
-              <span className="text-base leading-none">{sound.emoji}</span>
-              <span className="truncate max-w-full">{sound.label}</span>
-            </button>
-          ))}
-        </div>
-      )}
       <div className="composer-inner">
         <button type="button" className="icon-btn shrink-0" onClick={() => fileInputRef.current?.click()} aria-label="Прикрепить файл" data-testid={attachTestId}><ImageIcon size={18} /></button>
-        {onPlayFunSound && (
-          <button
-            type="button"
-            className={`icon-btn shrink-0 ${sfxOpen ? 'border-[hsl(var(--primary))] text-[hsl(var(--primary))]' : ''}`}
-            onClick={() => setSfxOpen((open) => !open)}
-            aria-label="Звуковая панель"
-            data-testid="button-soundboard"
-          >
-            <Music2 size={18} />
-          </button>
-        )}
+        {(onPlayFunSound || onAgentAlarm) && <ComposerTools onPlaySound={onPlayFunSound} onAlarm={onAgentAlarm} cooldown={agentAlarmCooldownSec} />}
         <textarea value={draft} onChange={(event) => onDraftChange(event.target.value)} onKeyDown={handleKeyDown} placeholder={placeholder} aria-label="Новое сообщение" data-testid="input-message" rows={1} />
-        <button className="primary-btn !h-9 !w-9 !p-0" onClick={onSend} aria-label="Отправить сообщение" data-testid="button-send-message"><Send size={15} /></button>
-        {onAgentAlarm && (
-          <button
-            type="button"
-            className={`icon-btn shrink-0 !h-9 !w-9 ${agentAlarmCooldownSec ? 'opacity-45' : 'text-[hsl(var(--accent))]'}`}
-            onClick={onAgentAlarm}
-            disabled={Boolean(agentAlarmCooldownSec)}
-            aria-label={agentAlarmCooldownSec ? `Будильник через ${agentAlarmCooldownSec} сек` : 'Будильник в чат'}
-            title={agentAlarmCooldownSec ? `Можно снова через ${formatAlarmCooldown(agentAlarmCooldownSec * 1000)}` : 'Будильник для всех (раз в 5 мин)'}
-            data-testid="button-agent-alarm"
-          >
-            <AlarmClock size={17} />
-          </button>
-        )}
+        <button className="primary-btn !h-9 !w-9 !p-0" disabled={!draft.trim()} onClick={onSend} aria-label="Отправить сообщение" data-testid="button-send-message"><Send size={15} /></button>
       </div>
-      <div className="mt-2 flex items-center gap-1.5 px-1 font-mono text-[9px] uppercase tracking-wider text-[hsl(var(--muted-foreground))]"><LockKeyhole size={10} /> {footerHint} <span className="ml-auto">enter — отправить</span></div>
+      <div className="d2-composer-footer"><StudioCredit /><span className="d2-keyboard-hint">Enter — отправить · Shift+Enter — новая строка</span></div>
     </div>
   );
 }
@@ -882,8 +693,9 @@ export function Workspace() {
   const [voiceRooms, setVoiceRooms] = useState<StoredVoice[]>(() => readStore(VOICE_KEY, seedVoice));
   const [selectedId, setSelectedId] = useState('general');
   const [draft, setDraft] = useState('');
-  const [showChannelDialog, setShowChannelDialog] = useState(false);
-  const [showInviteDialog, setShowInviteDialog] = useState(false);
+  const pendingChannelNamesRef = useRef(new Set<string>());
+  const [copyingInvite, setCopyingInvite] = useState(false);
+  const copyingInviteRef = useRef(false);
   const [overlay, setOverlay] = useState<null | 'diagnostics' | 'settings'>(null);
   const [toast, setToast] = useState('');
   const [agentAlarmCooldownSec, setAgentAlarmCooldownSec] = useState(0);
@@ -1825,8 +1637,14 @@ export function Workspace() {
     onVoteYes,
   };
   const onComposerKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); sendMessage(); } };
-  const addChannel = (channelName: string, type: ChannelType) => {
-    const sameType = channels.filter((channel) => channel.type === type).length;
+  const addChannel = (type: ChannelType) => {
+    for (const channel of channels) pendingChannelNamesRef.current.delete(`${channel.type}:${channel.name}`);
+    const prefix = type === 'voice' ? 'Голосовой' : 'Текстовый';
+    let number = 1;
+    const usedNames = new Set(channels.filter(channel => channel.type === type).map(channel => channel.name));
+    while (usedNames.has(`${prefix} ${number}`) || pendingChannelNamesRef.current.has(`${type}:${prefix} ${number}`)) number += 1;
+    const channelName = `${prefix} ${number}`;
+    const sameType = channels.filter((channel) => channel.type === type).length + [...pendingChannelNamesRef.current].filter(name => name.startsWith(`${type}:`)).length;
     const limit = type === 'voice' ? LIMITS.maxVoiceChannels : LIMITS.maxTextChannels;
     if (sameType >= limit) {
       setToast(type === 'voice' ? 'Лимит голосовых каналов: 5' : 'Лимит текстовых каналов: 5');
@@ -1837,7 +1655,7 @@ export function Workspace() {
         setToast('Нет соединения с комнатой');
         return;
       }
-      setShowChannelDialog(false);
+      pendingChannelNamesRef.current.add(`${type}:${channelName}`);
       setToast(`Создаём канал «${channelName}»`);
       return;
     }
@@ -1845,7 +1663,6 @@ export function Workspace() {
     setChannels((current) => [...current, { id, name: channelName, type, unreadCount: 0, members: type === 'voice' ? 0 : 1 }]);
     if (type === 'voice') setVoiceRooms((current) => [...current, { id, name: channelName, participantCount: 0, state: 'ready', participants: [] }]);
     setSelectedId(id);
-    setShowChannelDialog(false);
     setToast(`Канал «${channelName}» создан`);
   };
   const joinVoice = async (room: StoredVoice) => {
@@ -1865,6 +1682,7 @@ export function Workspace() {
       setSelectedId(room.id);
       setToast('Запрашиваем микрофон…');
       debugLog('voice', 'join requested', { roomId: room.id, connectionStatus, peerId });
+      let joiningMesh: VoiceMesh | null = null;
       try {
         if (activeVoice && activeVoice !== room.id) {
           sessionRef.current?.setVoiceChannel(null);
@@ -1939,12 +1757,10 @@ export function Workspace() {
             },
           },
         );
+        joiningMesh = mesh;
+        await mesh.setMicProcessing({ noiseSuppression, echoCancellation, enhancedNoise });
         await mesh.start();
         mesh.hydratePeerVolumes(peerVolumes);
-        const savedInput = loadAudioInputId();
-        const savedOutput = loadAudioOutputId();
-        if (savedInput) mesh.setInputDevice(savedInput);
-        if (savedOutput) mesh.setOutputDevice(savedOutput);
         voiceMeshRef.current = mesh;
         voiceChannelRef.current = room.id;
         setVoiceHint('Соединяем…');
@@ -1952,10 +1768,15 @@ export function Workspace() {
         voiceMeshRef.current?.setMicVolume(micVolume);
         applyEffectiveMicMute(muted, pttHeldRef.current, voiceTalkModeRef.current);
         voiceMeshRef.current?.setDeafened(deafened);
-        void voiceMeshRef.current?.setMicProcessing({ noiseSuppression, echoCancellation, enhancedNoise });
         sessionRef.current?.setVoiceChannel(room.id);
         debugLog('voice', 'join announced', { roomId: room.id });
       } catch (error) {
+        joiningMesh?.stop();
+        voiceMeshRef.current = null;
+        voiceChannelRef.current = null;
+        setActiveVoice(null);
+        setVoicePeerStatus('closed');
+        setVoiceHint('');
         debugLog('voice', 'join failed', error, 'error');
         setToast(error instanceof Error ? error.message : 'Не удалось получить доступ к микрофону');
         return;
@@ -2084,6 +1905,28 @@ export function Workspace() {
     }
   };
   const notify = (text: string) => setToast(text);
+  const copyInvite = async () => {
+    if (copyingInviteRef.current) return;
+    copyingInviteRef.current = true;
+    setCopyingInvite(true);
+    try {
+      const meta = await refreshCoordinatorInvite();
+      const invite = meta?.invite || server.invite;
+      if (!invite) {
+        notify('Приглашение пока не готово. Повторите попытку.');
+        return;
+      }
+      if (meta?.invite) setServer(current => ({ ...current, invite: meta.invite }));
+      await navigator.clipboard.writeText(invite);
+      notify('Ссылка скопирована — отправьте её другу');
+    } catch {
+      notify('Не удалось скопировать приглашение. Повторите попытку.');
+    } finally {
+      copyingInviteRef.current = false;
+      setCopyingInvite(false);
+    }
+  };
+
   const leaveServer = () => {
     leaveVoice();
     sessionRef.current?.stop();
@@ -2168,8 +2011,12 @@ export function Workspace() {
     ? connectionError
     : statusLabel(connectionStatus);
   const needsPublicUrlBanner = isCoordinator && isDesktopShell() && !getPublicUrl();
+  const waitingForVoicePeers = activeVoice && !voiceRooms
+    .find((room) => room.id === activeVoice)?.participants.some((person) => person.id !== peerId);
   const voiceStatusLabel =
-    voicePeerStatus === 'connected'
+    waitingForVoicePeers
+      ? 'Вы в канале. Ждём друзей.'
+      : voicePeerStatus === 'connected'
       ? 'Голос подключен'
       : voicePeerStatus === 'failed'
         ? voiceHint || 'Нет прямого пути / нужен TURN'
@@ -2183,7 +2030,7 @@ export function Workspace() {
   const chatAreaClassName = `chat-area theme-chat-bg${chatBgThemeSuffix}`;
   const voiceRoomLayoutClassName = `voice-room-layout theme-chat-bg${chatBgThemeSuffix}`;
 
-  return <div className="noise workspace-shell" style={shellStyle}>
+  return <div className="workspace-shell d2-workspace" style={shellStyle}>
     <PatriotJoinPopup token={patriotPopupToken} />
     <WorkspaceNav unreadTotal={unreadTotal} onDiagnostics={() => setOverlay('diagnostics')} onSettings={() => setOverlay('settings')} />
     <ChannelPane
@@ -2192,8 +2039,8 @@ export function Workspace() {
       voiceRooms={voiceRooms}
       selectedId={selectedId}
       onSelect={selectChannel}
-      onAdd={() => setShowChannelDialog(true)}
-      onInvite={() => setShowInviteDialog(true)}
+      onAdd={addChannel}
+      onInvite={() => void copyInvite()}
       onLeaveServer={leaveServer}
       selfPeerId={peerId}
       selfDisplayName={displayName}
@@ -2230,78 +2077,15 @@ export function Workspace() {
       onToggleScreenShare={activeVoice ? () => void toggleScreenShare() : undefined}
     />
     <main className="content-pane">
-      <header className="topbar">
-        <div className="flex min-w-0 items-center gap-3"><button className="icon-btn mobile-channel-chip" aria-label="Открыть список каналов" data-testid="button-open-channels"><Menu size={18} /></button><div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]">{selectedChannel?.type === 'voice' ? <Volume2 size={16} /> : <Hash size={16} />}</div><div className="min-w-0"><h1 className="truncate font-display text-[16px] font-bold tracking-[-.03em]">{selectedChannel?.name ?? 'общий'}</h1><p className="topbar-subtitle truncate text-[10px] text-[hsl(var(--muted-foreground))]">{selectedChannel?.type === 'voice' ? 'Голосовая комната' : connectionHint}</p></div></div>
-        <div className="flex items-center gap-2">
-          <ConnectionStatusChips connectionStatus={connectionStatus} isCoordinator={isCoordinator} invite={server.invite} />
-          <button
-            type="button"
-            className="icon-btn hidden sm:inline-flex"
-            onClick={() => {
-              setMemberPaneCollapsed((value) => {
-                const next = !value;
-                saveMemberPaneCollapsed(next);
-                return next;
-              });
-            }}
-            aria-label={memberPaneCollapsed ? 'Показать участников' : 'Свернуть участников'}
-            data-testid="button-toggle-member-pane"
-          >
-            {memberPaneCollapsed ? <PanelRightOpen size={17} /> : <PanelRightClose size={17} />}
-          </button>
-          <button className="ghost-btn hidden sm:inline-flex" onClick={() => setShowInviteDialog(true)} data-testid="button-top-invite"><UserPlus size={15} /> <span>Пригласить</span></button>
-          <button className="icon-btn" onClick={() => setOverlay('diagnostics')} aria-label="Открыть диагностику" data-testid="button-open-diagnostics"><Activity size={17} /></button>
-        </div>
-      </header>
-      {showSetupGuide && (
-        <div className="mx-4 mt-3 rounded-xl border border-[hsl(var(--primary)/.4)] bg-[hsl(var(--primary)/.1)] px-4 py-3 text-sm" data-testid="banner-setup-guide">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <div className="font-semibold">Сервер создан — три шага</div>
-              <ol className="mt-2 list-decimal space-y-1 pl-4 text-xs leading-5 text-[hsl(var(--muted-foreground))]">
-                <li className={getPublicUrl() ? 'text-[hsl(var(--foreground))]' : ''}>
-                  Туннель {getPublicUrl() ? 'готов ✓' : 'поднимается…'}
-                </li>
-                <li>Нажмите «Пригласить» и отправьте ссылку другу</li>
-                <li>Оба зайдите в голосовой канал — чат уже работает без голоса</li>
-              </ol>
-            </div>
-            <button
-              type="button"
-              className="icon-btn shrink-0"
-              aria-label="Скрыть подсказку"
-              onClick={() => {
-                dismissOnboardingGuide();
-                setShowSetupGuide(false);
-              }}
-              data-testid="button-dismiss-setup-guide"
-            >
-              <X size={16} />
-            </button>
-          </div>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <button type="button" className="primary-btn !py-2 text-xs" onClick={() => setShowInviteDialog(true)} data-testid="button-guide-invite">
-              Пригласить друзей
-            </button>
-            <button
-              type="button"
-              className="ghost-btn !py-2 text-xs"
-              onClick={() => {
-                dismissOnboardingGuide();
-                setShowSetupGuide(false);
-              }}
-              data-testid="button-guide-dismiss"
-            >
-              Понятно
-            </button>
-          </div>
-        </div>
-      )}
+      <RoomHeader name={selectedChannel?.name ?? 'общий'} voice={selectedChannel?.type === 'voice'} status={connectionStatus} detail={connectionHint} membersCollapsed={memberPaneCollapsed}
+        onToggleMembers={() => setMemberPaneCollapsed(value => { const next = !value; saveMemberPaneCollapsed(next); return next; })}
+        onInvite={() => void copyInvite()} inviteBusy={copyingInvite} onDiagnostics={() => setOverlay('diagnostics')} />
+      {showSetupGuide && connectionStatus === 'connected' && <RoomWelcome onDismiss={() => { dismissOnboardingGuide(); setShowSetupGuide(false); }} />}
       {needsPublicUrlBanner && (
-        <div className="mx-4 mt-3 rounded-xl border border-[hsl(var(--accent)/.45)] bg-[hsl(var(--accent)/.12)] px-4 py-3 text-sm" data-testid="banner-public-url">
-          <div className="font-semibold">Авто-туннель не поднялся</div>
+        <details className="d2-network-notice" data-testid="banner-public-url">
+          <summary><span>Вход из интернета недоступен</span><span className="d2-network-action">Настроить</span></summary>
           <p className="mt-1 text-xs leading-5 text-[hsl(var(--muted-foreground))]">
-            Desktop сам поднимает Cloudflare Quick Tunnel. Нажмите «Повторить» или задайте URL вручную в настройках.
+            Нет публичного адреса комнаты. Повторите подключение или проверьте настройки сети.
           </p>
           <div className="mt-2 flex gap-2">
             <button
@@ -2318,11 +2102,11 @@ export function Workspace() {
               }}
               data-testid="button-banner-retry-tunnel"
             >
-              Повторить туннель
+              Повторить подключение
             </button>
             <button className="ghost-btn" onClick={() => setOverlay('settings')} data-testid="button-banner-settings">Настройки</button>
           </div>
-        </div>
+        </details>
       )}
       {selectedVoice ? (
         <div className={`flex min-h-0 flex-1 flex-col ${activeVoice === selectedVoice.id ? '' : 'items-center justify-center px-6 text-center'}`}>
@@ -2355,7 +2139,7 @@ export function Workspace() {
                     </p>
                   )}
                   {activeVoice !== selectedVoice.id && (
-                    <p className="mt-2 max-w-sm text-sm leading-6 text-[hsl(var(--muted-foreground))]">Нажмите «войти», чтобы разрешить микрофон и подключиться по WebRTC.</p>
+                    <p className="mt-2 max-w-sm text-sm leading-6 text-[hsl(var(--muted-foreground))]">Войдите в канал, чтобы говорить с друзьями. При первом входе потребуется доступ к микрофону.</p>
                   )}
                 </div>
               </div>
@@ -2448,8 +2232,9 @@ export function Workspace() {
           data-testid="resizer-member-pane"
         />
       )}
+      <details className="d2-room-details"><summary>Сведения о комнате</summary><p>Сообщения зашифрованы end-to-end.</p><p>{isCoordinator ? 'Вы координатор комнаты.' : `Координатор: ${server.hostName}`}</p><p>{connectionHint}</p></details>
       <div className="mb-7"><div className="flex items-center justify-between"><span className="font-mono text-[10px] font-bold uppercase tracking-[.15em] text-[hsl(var(--muted-foreground))]">Комната</span><span className="h-2 w-2 rounded-full bg-[hsl(var(--primary))]" /></div><div className="mt-4 flex items-center gap-2"><div className="grid h-8 w-8 place-items-center rounded-lg text-xs font-extrabold" style={avatarColors(server.name)}>{avatarInitials(server.name)}</div><div><div className="text-xs font-bold">{server.name}</div><div className="font-mono text-[9px] text-[hsl(var(--muted-foreground))]">координатор: {server.hostName}</div></div></div></div>
-      <div className="mb-8"><div className="mb-3 flex items-center justify-between"><span className="font-mono text-[10px] font-bold uppercase tracking-[.15em] text-[hsl(var(--muted-foreground))]">Участники</span><span className="font-mono text-[10px] text-[hsl(var(--muted-foreground))]">{server.memberCount}</span></div><div className="space-y-3">{visibleMembers.length === 0 ? <p className="text-xs text-[hsl(var(--muted-foreground))]">{connectionStatus === 'connected' ? 'Пока только вы' : 'Ждём подключения…'}</p> : visibleMembers.map((member, index) => <div className={`flex items-center gap-2 ${member.online ? '' : 'opacity-45'}`} key={member.id} data-testid={`member-${index}`}><div className="relative"><div className="member-avatar" style={avatarColors(member.id)}>{avatarInitials(member.name)}</div><span className={`absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full border-2 border-[hsl(var(--card))] ${member.online ? 'bg-[hsl(var(--primary))]' : 'bg-[hsl(var(--muted-foreground))]'}`} /></div><span className="min-w-0 truncate text-xs font-semibold"><ChatName name={member.name} seed={member.id} /></span>{member.id === server.hostId && <span className="ml-auto font-mono text-[8px] uppercase text-[hsl(var(--muted-foreground))]">координатор</span>}</div>)}</div><button className="mt-4 flex items-center gap-2 text-xs font-bold text-[hsl(var(--secondary))] transition hover:text-[hsl(var(--accent))]" onClick={() => setShowInviteDialog(true)} data-testid="button-member-invite"><Plus size={14} /> Ещё люди</button></div>
+      <div className="mb-8"><div className="mb-3 flex items-center justify-between"><span className="font-mono text-[10px] font-bold uppercase tracking-[.15em] text-[hsl(var(--muted-foreground))]">Участники</span><span className="font-mono text-[10px] text-[hsl(var(--muted-foreground))]">{server.memberCount}</span></div><div className="space-y-3">{visibleMembers.length === 0 ? <p className="text-xs text-[hsl(var(--muted-foreground))]">{connectionStatus === 'connected' ? 'Пока только вы' : 'Ждём подключения…'}</p> : visibleMembers.map((member, index) => <div className={`flex items-center gap-2 ${member.online ? '' : 'opacity-45'}`} key={member.id} data-testid={`member-${index}`}><div className="relative"><div className="member-avatar" style={avatarColors(member.id)}>{avatarInitials(member.name)}</div><span className={`absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full border-2 border-[hsl(var(--card))] ${member.online ? 'bg-[hsl(var(--primary))]' : 'bg-[hsl(var(--muted-foreground))]'}`} /></div><span className="min-w-0 truncate text-xs font-semibold"><ChatName name={member.name} seed={member.id} /></span>{member.id === server.hostId && <span className="ml-auto font-mono text-[8px] uppercase text-[hsl(var(--muted-foreground))]">координатор</span>}</div>)}</div></div>
       {sideAlerts.length > 0 && (
         <div className="mt-auto space-y-2 pb-2" data-testid="side-alerts">
           {sideAlerts.map((alert) => (
@@ -2477,16 +2262,7 @@ export function Workspace() {
         </div>
       )}
     </aside>
-    {showChannelDialog && <CreateChannelDialog onClose={() => setShowChannelDialog(false)} onCreate={addChannel} />}
-    {showInviteDialog && (
-      <InviteDialog
-        server={server}
-        onClose={() => setShowInviteDialog(false)}
-        onNotify={notify}
-        onInviteUpdated={(invite) => setServer((current) => ({ ...current, invite }))}
-      />
-    )}
-    {overlay === 'diagnostics' && <div className="fixed inset-x-0 bottom-0 z-[80] overflow-auto bg-[hsl(var(--background))]" style={{ top: 'var(--app-titlebar-h, 36px)' }}><Diagnostics onClose={() => setOverlay(null)} /></div>}
+    {overlay === 'diagnostics' && <div className="fixed inset-x-0 bottom-0 z-[80] overflow-auto bg-[hsl(var(--background))]" style={{ top: 'var(--app-titlebar-h, 36px)' }}><Diagnostics onClose={() => setOverlay(null)} onSettings={() => setOverlay('settings')} /></div>}
     {overlay === 'settings' && <div className="fixed inset-x-0 bottom-0 z-[80] overflow-auto bg-[hsl(var(--background))]" style={{ top: 'var(--app-titlebar-h, 36px)' }}><SettingsPage onClose={() => setOverlay(null)} /></div>}
     {peerVolumeMenu && (
       <PeerVolumeContextMenu
@@ -2500,4 +2276,3 @@ export function Workspace() {
     {toast && <Toast text={toast} onClose={() => setToast('')} />}
   </div>;
 }
-

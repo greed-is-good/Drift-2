@@ -31,4 +31,13 @@ describe("app-update", () => {
       "95572fc81114a806eebf5c189e5e94ed36311b1a5bb273dfb30eebbba2e98cad",
     );
   });
+
+  it("never offers a Windows installer on macOS", () => {
+    const windows = { name: "Drift_2.0.0_x64-setup.exe", browser_download_url: "https://x/setup" };
+    const mac = { name: "Drift_2.0.0_aarch64.dmg", browser_download_url: "https://x/dmg" };
+    assert.equal(pickInstallerAsset([windows, mac], "macos"), mac);
+    assert.equal(pickInstallerAsset([windows], "macos"), null);
+    assert.equal(pickInstallerAsset([windows, mac], "windows"), windows);
+    assert.equal(pickInstallerAsset([windows, mac], "other"), null);
+  });
 });

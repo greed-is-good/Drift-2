@@ -1,12 +1,13 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useLocation } from 'wouter';
-import { ArrowRight, LockKeyhole, Settings, ShieldCheck, Trash2 } from 'lucide-react';
+import { ArrowRight, Plus, Link, MessageCircle, Settings, ShieldCheck, Trash2 } from 'lucide-react';
 import { activateSavedServer, createLocalRoom, getBootstrapOrigin, getPeerId, isDesktopShell, isLocalhostOrigin, loadSavedServers, parseInvite, prepareJoin, removeSavedServer, setBootstrapOrigin, type SavedServer } from '@/lib/p2p-client';
 import { isValidDisplayName, normalizeDisplayName, PENDING_INVITE_EVENT, takePendingInvite } from '@/lib/invite-deep-link';
 import { avatarColors, avatarInitials } from '@/lib/avatar';
 import { type Server, SERVER_KEY, CHANNELS_KEY, MESSAGES_KEY, VOICE_KEY, PROFILE_NAME_KEY, readStore, writeStore, roomStateToClientState } from '@/lib/app-shared';
 import { markServerCreatedGuide } from '@/lib/onboarding-guide';
-import { LogoMark, CreatorCredit, AppVersionLabel, Toast } from '@/components/app-brand';
+import { LogoMark, CreatorCredit, AppVersionLabel } from '@/components/app-brand';
+import { Button, Input, Field, Panel } from '@/components/drift-ui';
 import { SettingsPage } from '@/components/settings-page';
 
 export function Home() {
@@ -25,7 +26,7 @@ export function Home() {
   const requireName = (): string | null => {
     const memberName = normalizeDisplayName(displayName);
     if (!isValidDisplayName(memberName)) {
-      setToast('Сначала укажите имя (минимум 2 символа) — без него на сервер не пустим');
+      setToast('Укажите имя: от 2 до 32 символов');
       return null;
     }
     return memberName;
@@ -57,7 +58,7 @@ export function Home() {
 
   const forgetSaved = (roomId: string) => {
     setSavedServers(removeSavedServer(roomId));
-    setToast('Сервер убран из списка');
+    setToast('Комната убрана из списка');
   };
 
   const createServer = async (event: FormEvent) => {
@@ -95,7 +96,7 @@ export function Home() {
     if (!isValidDisplayName(memberName)) {
       setMode('join');
       setInvite(rawInvite);
-      setToast('Сначала укажите имя (минимум 2 символа) — без него на сервер не пустим');
+      setToast('Укажите имя: от 2 до 32 символов');
       return;
     }
     const parsed = parseInvite(rawInvite);
@@ -172,153 +173,52 @@ export function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   return (
-    <main className="noise h-full min-h-0 overflow-hidden app-grid" style={{ background: 'hsl(var(--background))' }}>
-      <div className="mx-auto grid h-full min-h-0 max-w-[1500px] grid-cols-1 lg:grid-cols-[1.05fr_.95fr]">
-        <section className="relative flex min-h-[440px] flex-col overflow-hidden px-6 py-7 text-[#f5f0df] lg:min-h-0 lg:h-full lg:px-14 lg:py-10" style={{ background: 'hsl(var(--sidebar))' }}>
-          <div className="absolute -right-24 top-24 h-72 w-72 rounded-full border border-[#d8fa67]/20" />
-          <div className="absolute -right-8 top-40 h-56 w-56 rounded-full border border-[#d8fa67]/15" />
-          <div className="absolute bottom-[-100px] left-[-70px] h-72 w-72 rounded-full" style={{ background: 'hsl(var(--accent) / .13)' }} />
-          <LogoMark />
-          <div className="relative z-10 mt-auto max-w-[590px] pb-3 pt-24 lg:pb-12">
-            <div className="mb-7 inline-flex items-center gap-2 rounded-full border border-[#f5f0df]/15 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[.18em] text-[#d8fa67]"><span className="animate-pulse-dot h-1.5 w-1.5 rounded-full bg-[#d8fa67]" /> private by default</div>
-            <h1 className="font-display text-[clamp(3.1rem,7vw,6.8rem)] font-bold leading-[.91] tracking-[-.08em]">Свои люди.<br /><span style={{ color: 'hsl(var(--primary))' }}>Своя комната.</span></h1>
-            <p className="mt-7 max-w-[460px] text-[15px] leading-7 text-[#f5f0df]/63">В Drift нет постоянного сервера: роль хоста «дрейфует» между участниками. Ушёл один — комнату подхватывает следующий, и связь продолжается.</p>
-            <div className="mt-12 grid max-w-[430px] grid-cols-3 gap-5 border-t border-[#f5f0df]/15 pt-5">
-              <div><div className="font-display text-2xl font-bold">01</div><div className="mt-1 text-[11px] text-[#f5f0df]/48">Создать комнату</div></div>
-              <div><div className="font-display text-2xl font-bold">02</div><div className="mt-1 text-[11px] text-[#f5f0df]/48">Позвать своих</div></div>
-              <div><div className="font-display text-2xl font-bold">∞</div><div className="mt-1 text-[11px] text-[#f5f0df]/48">Остаться на связи</div></div>
-            </div>
-          </div>
-          <div className="absolute right-[11%] top-[24%] hidden w-48 rotate-[-5deg] rounded-2xl border border-[#f5f0df]/15 bg-[#f5f0df]/[.06] p-4 backdrop-blur-md lg:block animate-float">
-            <div className="mb-5 flex items-center justify-between"><span className="font-mono text-[9px] uppercase tracking-widest text-[#f5f0df]/45">room / 17</span><span className="h-2 w-2 rounded-full bg-[#d8fa67]" /></div>
-            <div className="space-y-3"><div className="h-2 w-24 rounded-full bg-[#f5f0df]/20" /><div className="h-2 w-32 rounded-full bg-[#f5f0df]/10" /><div className="h-2 w-20 rounded-full bg-[#d8fa67]/50" /></div>
-            <div className="mt-5 flex items-center gap-1"><div className="h-5 w-5 rounded-md bg-[#d8fa67]"/><div className="h-5 w-5 rounded-md bg-[#f28262]"/><div className="h-5 w-5 rounded-md bg-[#f5f0df]/20"/><span className="ml-1 text-[9px] text-[#f5f0df]/50">18 здесь</span></div>
-          </div>
-        </section>
-        <section className="flex max-h-full items-start overflow-y-auto px-6 py-10 sm:px-12 lg:px-20">
-          <div className="mx-auto w-full max-w-[440px] animate-rise">
-            <div className="mb-8 flex items-center justify-between lg:hidden">
-              <LogoMark small />
-              <span className="font-mono text-[10px] uppercase tracking-widest text-[hsl(var(--muted-foreground))]">приватная комната</span>
-            </div>
-            <div className="mb-8"><p className="font-mono text-[10px] uppercase tracking-[.18em] text-[hsl(var(--muted-foreground))]">Вход в пространство</p><h2 className="font-display mt-3 text-4xl font-bold tracking-[-.06em]">Где собираемся?</h2><p className="mt-3 text-sm leading-6 text-[hsl(var(--muted-foreground))]">Комната синхронизируется между приглашёнными участниками. Никаких аккаунтов и лишних шагов.</p></div>
-
-            <div className="mb-5">
-              <label className="field-label" htmlFor="display-name">Ваше имя / логин</label>
-              <input
-                id="display-name"
-                className="field-input"
-                value={displayName}
-                onChange={(event) => setDisplayName(event.target.value)}
-                placeholder="Например, Миша"
-                data-testid="input-display-name"
-                required
-                minLength={2}
-                maxLength={32}
-              />
-              {!nameOk && (
-                <p className="mt-2 text-xs text-[hsl(var(--accent))]" data-testid="text-name-required">
-                  Без имени создать сервер или войти по ссылке нельзя.
-                </p>
-              )}
-            </div>
-
-            <div className="mb-7 grid grid-cols-2 rounded-xl bg-[hsl(var(--muted))] p-1" role="tablist">
-              <button className={`rounded-[9px] px-3 py-2.5 text-sm font-bold transition ${mode === 'create' ? 'bg-[hsl(var(--card))] text-[hsl(var(--foreground))] shadow-sm' : 'text-[hsl(var(--muted-foreground))]'}`} onClick={() => setMode('create')} data-testid="tab-create-server">Создать сервер</button>
-              <button className={`rounded-[9px] px-3 py-2.5 text-sm font-bold transition ${mode === 'join' ? 'bg-[hsl(var(--card))] text-[hsl(var(--foreground))] shadow-sm' : 'text-[hsl(var(--muted-foreground))]'}`} onClick={() => setMode('join')} data-testid="tab-join-server">Войти по ссылке</button>
-            </div>
-
-            {mode === 'create' ? (
-              <form onSubmit={createServer} className="animate-rise" data-testid="form-create-server">
-                <label className="field-label" htmlFor="server-name">Название сервера</label>
-                <input id="server-name" className="field-input" value={name} onChange={(event) => setName(event.target.value)} placeholder="Например, «Наши выходные»" data-testid="input-server-name" autoFocus />
-                <div className="mt-4 flex items-start gap-2 rounded-xl bg-[hsl(var(--muted))] p-3.5 text-xs leading-5 text-[hsl(var(--muted-foreground))]"><LockKeyhole size={15} className="mt-0.5 shrink-0 text-[hsl(var(--secondary))]" /> Только вы решаете, кто получает приглашение. Сервер будет готов через секунду.</div>
-                <button className="primary-btn mt-6 w-full" type="submit" disabled={busy || !nameOk} data-testid="button-create-server">{busy ? 'Подключаем комнату…' : 'Создать приватный сервер'} {!busy && <ArrowRight size={16} />}</button>
-              </form>
-            ) : (
-              <form onSubmit={joinServer} className="animate-rise" autoComplete="off" data-testid="form-join-server">
-                <label className="field-label" htmlFor="invite-code">Ссылка приглашения</label>
-                <input
-                  id="invite-code"
-                  name="drift-invite-url"
-                  className="field-input"
-                  value={invite}
-                  onChange={(event) => setInvite(event.target.value)}
-                  placeholder="https://… или drift://j/…"
-                  autoComplete="off"
-                  autoCorrect="off"
-                  autoCapitalize="off"
-                  spellCheck={false}
-                  inputMode="url"
-                  data-1p-ignore="true"
-                  data-lpignore="true"
-                  data-form-type="other"
-                  data-testid="input-invite-code"
-                  autoFocus
-                />
-                <p className="mt-3 text-xs leading-5 text-[hsl(var(--muted-foreground))]">В Steam шлите https-ссылку из «Пригласить» — она кликабельна. После перезапуска хоста попросите свежую: меняется адрес туннеля.</p>
-                <button className="primary-btn mt-6 w-full" type="submit" disabled={busy || !nameOk || !invite.trim()} data-testid="button-join-server">{busy ? 'Проверяем приглашение…' : 'Войти в комнату'} {!busy && <ArrowRight size={16} />}</button>
-              </form>
-            )}
-
-            <div className="mt-4 flex justify-center">
-              <button
-                type="button"
-                className="inline-flex items-center justify-center gap-2 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-4 py-2.5 text-sm font-semibold text-[hsl(var(--foreground))] transition hover:border-[hsl(var(--primary)/.45)] hover:bg-[hsl(var(--muted))]"
-                onClick={() => setShowSettings(true)}
-                data-testid="button-home-settings"
-              >
-                <Settings size={15} className="text-[hsl(var(--secondary))]" /> Настройки
+    <main className="d2-home">
+      <aside className="d2-sidebar">
+        <LogoMark />
+        <div className="d2-sidebar-caption">Ваш круг общения</div>
+        <nav aria-label="Комнаты" className="d2-room-list" data-testid="saved-servers">
+          <h2>Ваши комнаты <span>{savedServers.length}</span></h2>
+          {savedServers.length === 0 ? <div className="d2-empty"><MessageCircle size={24} /><p>Здесь будут ваши комнаты</p><span>Создайте свою или присоединитесь по приглашению.</span></div> : savedServers.map(server => (
+            <div className="d2-room" key={server.roomId}>
+              <button className="d2-room-open" onClick={() => openSaved(server)} disabled={busy} data-testid={`button-open-server-${server.roomId}`}>
+                <span className="d2-avatar" style={avatarColors(server.name)}>{avatarInitials(server.name)}</span>
+                <span><strong>{server.name}</strong><small>{server.role}</small></span>
               </button>
+              <button className="d2-room-remove" disabled={busy} aria-label={`Убрать ${server.name} из списка`} onClick={() => forgetSaved(server.roomId)} data-testid={`button-forget-server-${server.roomId}`}><Trash2 size={15} /></button>
             </div>
-
-            {savedServers.length > 0 && (
-              <div className="mt-10" data-testid="saved-servers">
-                <div className="mb-3 font-mono text-[10px] uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]">Ваши серверы</div>
-                <div className="max-h-[min(280px,36vh)] space-y-2 overflow-y-auto pr-1 scrollbar-thin">
-                  {savedServers.map((server) => (
-                    <div key={server.roomId} className="flex items-center gap-2 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--muted)/.4)] p-2.5">
-                      <button
-                        type="button"
-                        className="flex min-w-0 flex-1 items-center gap-3 text-left"
-                        onClick={() => openSaved(server)}
-                        data-testid={`button-open-server-${server.roomId}`}
-                      >
-                        <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-[11px] font-extrabold" style={avatarColors(server.name)}>{avatarInitials(server.name)}</div>
-                        <span className="min-w-0">
-                          <span className="block truncate text-sm font-bold">{server.name}</span>
-                          <span className="mt-0.5 block font-mono text-[9px] uppercase tracking-wider text-[hsl(var(--muted-foreground))]">{server.role}{server.hostName ? ` · ${server.hostName}` : ''}</span>
-                        </span>
-                        <ArrowRight size={16} className="ml-auto shrink-0 text-[hsl(var(--muted-foreground))]" />
-                      </button>
-                      <button type="button" className="icon-btn shrink-0" aria-label="Убрать из списка" onClick={() => forgetSaved(server.roomId)} data-testid={`button-forget-server-${server.roomId}`}><Trash2 size={14} /></button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {isDesktopShell() && (
-              <div className="mt-10 border-t border-[hsl(var(--border))] pt-6">
-                <label className="field-label" htmlFor="api-origin">Резервный bootstrap (необязательно)</label>
-                <input id="api-origin" className="field-input" value={apiOrigin} onChange={(event) => setApiOriginState(event.target.value)} placeholder="http://192.168.0.10:5000" data-testid="input-api-origin" />
-                <p className="mt-2 text-xs leading-5 text-[hsl(var(--muted-foreground))]">При создании комнаты coordinator запускается на этом компьютере автоматически. Укажите адрес только если подключаетесь через интернет или к чужому узлу.</p>
-              </div>
-            )}
-
-            <div className="mt-10 flex items-center gap-2 text-[11px] text-[hsl(var(--muted-foreground))]"><ShieldCheck size={14} /> Защищённая комната · без аккаунта</div>
-            <CreatorCredit className="mt-3 block text-[hsl(var(--muted-foreground))]" />
-            <AppVersionLabel className="mt-2 block" />
+          ))}
+        </nav>
+        <Button tone="quiet" onClick={() => setShowSettings(true)} data-testid="button-home-settings"><Settings size={16} />Настройки</Button>
+        <div className="d2-sidebar-footer"><CreatorCredit /><AppVersionLabel /></div>
+      </aside>
+      <section className="d2-main">
+        <header className="d2-page-heading"><span className="d2-eyebrow">НАЧНЁМ С РАЗГОВОРА</span><h1>Свои люди. Своя комната.</h1><p>Соберитесь вместе — для разговоров, игр и всего между ними.</p></header>
+        <Panel className="d2-entry">
+          <Field id="display-name" label="Как вас зовут?" hint="Это имя увидят друзья. От 2 до 32 символов.">
+            <Input id="display-name" value={displayName} onChange={event => setDisplayName(event.target.value)} placeholder="Ваше имя" maxLength={32} minLength={2} autoComplete="nickname" aria-describedby="display-name-hint" data-testid="input-display-name" disabled={busy} />
+          </Field>
+          <div className="d2-mode" role="group" aria-label="Способ входа">
+            <Button tone="quiet" aria-pressed={mode === 'create'} disabled={busy} onClick={() => setMode('create')} data-testid="tab-create-server"><Plus size={16} />Создать комнату</Button>
+            <Button tone="quiet" aria-pressed={mode === 'join'} disabled={busy} onClick={() => setMode('join')} data-testid="tab-join-server"><Link size={16} />По приглашению</Button>
           </div>
-        </section>
-      </div>
-      {toast && <Toast text={toast} onClose={() => setToast('')} />}
-      {showSettings && (
-        <div className="fixed inset-x-0 bottom-0 z-[80] overflow-auto bg-[hsl(var(--background))]" style={{ top: 'var(--app-titlebar-h, 36px)' }}>
-          <SettingsPage onClose={() => setShowSettings(false)} />
-        </div>
-      )}
+          {mode === 'create' ? <form onSubmit={createServer} data-testid="form-create-server">
+            <Field id="server-name" label="Название комнаты" hint="Приглашение для друзей появится после создания.">
+              <Input id="server-name" value={name} onChange={event => setName(event.target.value)} placeholder="Например, Вечерний отряд" aria-describedby="server-name-hint" disabled={busy} data-testid="input-server-name" />
+            </Field>
+            <Button tone="primary" type="submit" className="d2-submit" busy={busy} disabled={!nameOk} data-testid="button-create-server">{busy ? 'Создаём комнату…' : 'Создать комнату'}{!busy && <ArrowRight size={16} />}</Button>
+          </form> : <form onSubmit={joinServer} data-testid="form-join-server">
+            <Field id="invite-code" label="Приглашение" hint="Вставьте ссылку, которую прислал друг.">
+              <Input id="invite-code" name="drift-invite-url" value={invite} onChange={event => setInvite(event.target.value)} placeholder="https://… или drift://…" autoComplete="off" spellCheck={false} disabled={busy} aria-describedby="invite-code-hint" data-testid="input-invite-code" />
+            </Field>
+            <Button tone="primary" type="submit" className="d2-submit" busy={busy} disabled={!nameOk || !invite.trim()} data-testid="button-join-server">{busy ? 'Подключаемся…' : 'Присоединиться'}{!busy && <ArrowRight size={16} />}</Button>
+          </form>}
+          {isDesktopShell() && <details className="d2-advanced"><summary>Параметры подключения</summary><Field id="api-origin" label="Резервный адрес" hint="Необязательно. Укажите, если используете свой узел подключения."><Input id="api-origin" value={apiOrigin} onChange={event => setApiOriginState(event.target.value)} placeholder="http://192.168.0.10:5000" disabled={busy} aria-describedby="api-origin-hint" data-testid="input-api-origin" /></Field></details>}
+        </Panel>
+        <p className="d2-privacy"><ShieldCheck size={16} />Без аккаунта. Вход по приглашению.</p>
+      </section>
+      {toast && <div className="d2-notice" role="status"><span>{toast}</span><Button tone="quiet" onClick={() => setToast('')}>Закрыть</Button></div>}
+      {showSettings && <div className="fixed inset-x-0 bottom-0 z-[80] overflow-auto bg-[hsl(var(--background))]" style={{ top: 'var(--app-titlebar-h, 36px)' }}><SettingsPage onClose={() => setShowSettings(false)} /></div>}
     </main>
   );
 }
-

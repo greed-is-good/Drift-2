@@ -62,6 +62,9 @@ async fn ensure_node_and_tunnel(
     let ngrok_token = ngrok_auth_token.unwrap_or(stored_ngrok);
     let zrok = zrok_token.unwrap_or(stored_zrok);
 
+    // Serialize tunnel startup/restart so concurrent room and heartbeat calls
+    // cannot replace each other's child process or return a dead cached URL.
+    let mut tunnel_guard = state.tunnel.lock().await;
     let active = *state.active_provider.lock().await;
     let existing = state.public_origin.lock().await.clone();
     let provider_changed = active.is_some_and(|current| current != provider);
@@ -69,18 +72,21 @@ async fn ensure_node_and_tunnel(
     let must_restart = force_restart_tunnel || provider_changed || url_mismatched;
 
     if must_restart {
-        let mut tunnel_guard = state.tunnel.lock().await;
         *tunnel_guard = None;
         let mut public = state.public_origin.lock().await;
         *public = None;
         *state.active_provider.lock().await = None;
-    } else if existing.is_some() {
+    } else if existing.is_some() && tunnel_guard.as_ref().is_some_and(TunnelHandle::is_running) {
         return Ok(LocalNodeInfoDto {
             origin,
             lan_origins,
             public_origin: existing,
             tunnel_error: None,
         });
+    } else {
+        *tunnel_guard = None;
+        *state.public_origin.lock().await = None;
+        *state.active_provider.lock().await = None;
     }
 
     let started = tokio::task::spawn_blocking(move || {
@@ -90,7 +96,7 @@ async fn ensure_node_and_tunnel(
 
     match started {
         Ok(Ok((tunnel_handle, info))) => {
-            *state.tunnel.lock().await = Some(tunnel_handle);
+            *tunnel_guard = Some(tunnel_handle);
             *state.public_origin.lock().await = Some(info.public_origin.clone());
             *state.active_provider.lock().await = Some(provider);
             Ok(LocalNodeInfoDto {
@@ -122,7 +128,7 @@ fn provider_matches_url(provider: tunnel::TunnelProvider, url: &str) -> bool {
             lower.contains("trycloudflare.com") || lower.contains("cfargotunnel.com")
         }
         tunnel::TunnelProvider::Ngrok => lower.contains("ngrok"),
-        tunnel::TunnelProvider::LocalhostRun => lower.contains("localhost.run"),
+        tunnel::TunnelProvider::LocalhostRun => tunnel::is_localhost_run_origin(url),
         tunnel::TunnelProvider::Pinggy => lower.contains("pinggy"),
         tunnel::TunnelProvider::Bore => lower.contains("bore.pub"),
         tunnel::TunnelProvider::Zrok => lower.contains("zrok.io"),

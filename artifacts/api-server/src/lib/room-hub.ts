@@ -505,9 +505,10 @@ export class RoomHub {
           : [];
         const member = room.state.members.find((item) => item.id === client.peerId);
         if (!member) return;
+        const previousEndpoints = member.endpoints ?? [];
         const same =
-          endpoints.length === member.endpoints.length &&
-          endpoints.every((origin, index) => origin === member.endpoints[index]);
+          endpoints.length === previousEndpoints.length &&
+          endpoints.every((origin, index) => origin === previousEndpoints[index]);
         if (same) return;
         member.endpoints = endpoints;
         this.persist(room);

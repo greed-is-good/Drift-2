@@ -10,7 +10,7 @@ export type AppUpdateInfo = {
   body: string;
 };
 
-export const GITHUB_REPO = "ASMAXI/p2pchat";
+export const GITHUB_REPO = "greed-is-good/Drift-2";
 
 /** Pulls `x.y.z` out of tags like `v0.8.9`, `drift-v0.8.9`, `p2pchat-v0.2.0`. */
 function normalizeVersion(value: string): string {
@@ -46,7 +46,7 @@ export async function currentAppVersion(): Promise<string> {
   } catch {
     // fall through
   }
-  return "0.10.8";
+  return "2.0.0";
 }
 
 type GithubReleaseAsset = {
@@ -55,7 +55,22 @@ type GithubReleaseAsset = {
   digest?: string;
 };
 
-export function pickInstallerAsset(assets: GithubReleaseAsset[]): GithubReleaseAsset | null {
+export type UpdatePlatform = "windows" | "macos" | "other";
+
+export function getUpdatePlatform(): UpdatePlatform {
+  if (typeof navigator === "undefined") return "other";
+  const platform = navigator.userAgent;
+  if (/Windows/i.test(platform)) return "windows";
+  if (/Macintosh|Mac OS X/i.test(platform)) return "macos";
+  return "other";
+}
+
+export function pickInstallerAsset(
+  assets: GithubReleaseAsset[],
+  platform: UpdatePlatform = "windows",
+): GithubReleaseAsset | null {
+  if (platform === "macos") return assets.find((asset) => /\.dmg$/i.test(asset.name)) ?? null;
+  if (platform !== "windows") return null;
   return (
     assets.find((asset) => /setup\.exe$/i.test(asset.name)) ||
     assets.find((asset) => /\.msi$/i.test(asset.name)) ||
@@ -85,7 +100,7 @@ export async function checkForAppUpdate(): Promise<AppUpdateInfo> {
   };
   const latestVersion = normalizeVersion(release.tag_name || release.name || currentVersion);
   const assets = release.assets ?? [];
-  const installer = pickInstallerAsset(assets);
+  const installer = pickInstallerAsset(assets, getUpdatePlatform());
   const upToDate = compareSemver(currentVersion, latestVersion) >= 0;
   return {
     upToDate,

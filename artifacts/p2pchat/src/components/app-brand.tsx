@@ -25,6 +25,10 @@ export function CreatorCredit({ className = '' }: { className?: string }) {
   return <span className={`font-mono text-[10px] uppercase tracking-[.14em] ${className}`} data-testid="text-creator">Drift · создатель ASMAXI</span>;
 }
 
+export function StudioCredit() {
+  return <a href="https://nometro.studio" target="_blank" rel="noopener noreferrer" className="d2-studio-credit">Сделано в nometro.studio</a>;
+}
+
 export function AppVersionLabel({ className = '' }: { className?: string }) {
   const [version, setVersion] = useState('');
   useEffect(() => {

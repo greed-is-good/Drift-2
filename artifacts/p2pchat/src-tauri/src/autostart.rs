@@ -1,5 +1,6 @@
 //! Windows autostart via HKCU Run key (Drift launches with OS).
 
+#[cfg(windows)]
 const VALUE_NAME: &str = "Drift";
 
 #[tauri::command]
